@@ -1,0 +1,109 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nonlinear Classification with SVM and Radial Features | Cameron Batts</title><style>body{margin:0;background:#f7f8fa;color:#152540;font:16px/1.65 system-ui}main{max-width:950px;margin:auto;padding:32px 24px}h1{font:bold 2.4rem Georgia}h2{border-bottom:2px solid #e8c97a;margin-top:36px}pre{padding:18px;background:white;border-left:3px solid #c9a84c;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px}details{margin:16px 0}summary{cursor:pointer}p{overflow-wrap:anywhere}a{color:#1a3560}img{max-width:100%;height:auto}</style><main><a href="/">← Portfolio</a><h1>Nonlinear Classification with SVM and Radial Features</h1><p><strong>Cameron Batts</strong></p><h2>Problem</h2><p>Compare an RBF-kernel SVM with logistic regression before and after engineering radial distance.</p><h2>Approach</h2><p>Generate 4,000 synthetic observations with two balanced radial classes. Tune 20 gamma values using a StandardScaler/SVC pipeline and five-fold cross-validation with C=1. Compare logistic regression using x1/x2 with the same model after adding x3=sqrt(x1²+x2²).</p><h2>Reported results</h2><p>Original in-sample accuracy was 58.925% for logistic regression using x1/x2. The tuned SVM and radial-feature logistic model each reached 100% accuracy, precision and recall on the fitting data. These scores illustrate representational fit; they are not independent test performance.</p><h2>Evaluation limits</h2><p>All displayed classification scores use the same observations used for model fitting. Grid-search cross-validation selects gamma, but the displayed 100% scores are resubstitution scores. Add a held-out test set and validate robustness under overlap/noise before drawing generalization conclusions.</p><h2>Data</h2><p>Synthetic data is generated in the notebook. The plotting helper is the existing Utils.DA.py file at the repository root.</p><h2>Verification</h2><p>Original numerical outputs are retained. The revised notebook was syntax-checked, not fully rerun during this update.</p><details><summary>Python code</summary><pre>import math
+import random
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score
+)
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import GridSearchCV
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+
+from pathlib import Path
+import importlib.util
+project_root = Path.cwd().parent if Path.cwd().name == &#x27;Notebooks&#x27; else Path.cwd()
+helper_spec = importlib.util.spec_from_file_location(&#x27;project_plotting&#x27;, project_root / &#x27;Utils.DA.py&#x27;)
+project_plotting = importlib.util.module_from_spec(helper_spec)
+helper_spec.loader.exec_module(project_plotting)
+plot_decision_boundary = project_plotting.plot_decision_boundary</pre></details><details><summary>Python code</summary><pre>random.seed(42)</pre></details><p>Here, we generate a synthetic dataset for classification with two predictors, `x1` and `x2`.</p><details><summary>Python code</summary><pre>def radial2cartesian(rho, theta):
+    return rho * math.cos(theta), rho * math.sin(theta)
+
+n_class0 = 2000
+n_class1 = 2000
+
+rho = [random.normalvariate(0.0, 0.10) for _ in range(n_class0)] + \
+      [random.lognormvariate(0.4, 0.2) for _ in range(n_class1)]
+theta = [random.uniform(0, 2 * math.pi) for _ in range(n_class0 + n_class1)]
+
+data = pd.DataFrame([radial2cartesian(r, t) for r, t in zip(rho, theta)], columns=[&#x27;x1&#x27;, &#x27;x2&#x27;])
+data[&#x27;y&#x27;] = pd.Series([0] * n_class0 + [1] * n_class1)
+
+_ = sns.scatterplot(x=&#x27;x1&#x27;, y=&#x27;x2&#x27;, hue=&#x27;y&#x27;, data=data, alpha=0.3)</pre></details><pre>&lt;Figure size 640x480 with 1 Axes&gt;</pre><details><summary>Python code</summary><pre>logistic_regression = LogisticRegression().fit(data[[&#x27;x1&#x27;, &#x27;x2&#x27;]].values, data[&#x27;y&#x27;].values)</pre></details><details><summary>Python code</summary><pre>plot_decision_boundary(
+    logistic_regression,
+    data[[&#x27;x1&#x27;, &#x27;x2&#x27;]].values, data[&#x27;y&#x27;].values,
+    n_points=500, alpha=0.3, x_label=&#x27;x1&#x27;, y_label=&#x27;x2&#x27;
+)</pre></details><pre>&lt;Figure size 640x480 with 1 Axes&gt;</pre><details><summary>Python code</summary><pre>accuracy_score(data[&#x27;y&#x27;], logistic_regression.predict(data[[&#x27;x1&#x27;, &#x27;x2&#x27;]].values))</pre></details><pre>0.58925</pre><details><summary>Python code</summary><pre>precision_score(data[&#x27;y&#x27;], logistic_regression.predict(data[[&#x27;x1&#x27;, &#x27;x2&#x27;]].values))</pre></details><pre>0.6079854809437386</pre><details><summary>Python code</summary><pre>recall_score(data[&#x27;y&#x27;], logistic_regression.predict(data[[&#x27;x1&#x27;, &#x27;x2&#x27;]].values))</pre></details><pre>0.5025</pre><p>As expected, the logistic classifier does not perform too well since the two classes are not linearly separable in the predictors space.</p><p>Let&#x27;s see if a Support Vector Machine classifier can learn a transformation of the current predictors such that in the transformed (and potentially higher-dimensional) predictors space the two classes are linearly separable.</p><details><summary>Python code</summary><pre>gamma_candidates = np.logspace(-2, 1, 20)</pre></details><details><summary>Python code</summary><pre>param_grid = {
+    &#x27;svc__gamma&#x27;: gamma_candidates,
+    &#x27;svc__kernel&#x27;: [&#x27;rbf&#x27;],
+    &#x27;svc__C&#x27;: [1]
+}
+
+pipeline = make_pipeline(StandardScaler(), SVC())
+
+grid_search = GridSearchCV(
+    pipeline,
+    param_grid,
+    cv=5
+)
+
+grid_search.fit(data[[&#x27;x1&#x27;, &#x27;x2&#x27;]].values, data[&#x27;y&#x27;].values)
+
+svc = grid_search.best_estimator_</pre></details><details><summary>Python code</summary><pre>svc = grid_search.best_estimator_</pre></details><p>Here we plot the decision boundary learned by the SVM.</p><details><summary>Python code</summary><pre>try:
+    plot_decision_boundary(
+        svc,
+        data[[&#x27;x1&#x27;, &#x27;x2&#x27;]].values, data[&#x27;y&#x27;].values,
+        n_points=500, alpha=0.3, x_label=&#x27;x1&#x27;, y_label=&#x27;x2&#x27;
+    )
+except NameError:
+    print(&#x27;The object `svc` does not exist!&#x27;)</pre></details><pre>&lt;Figure size 640x480 with 1 Axes&gt;</pre><details><summary>Python code</summary><pre>y_pred = svc.predict(data[[&#x27;x1&#x27;, &#x27;x2&#x27;]].values)
+
+accuracy = accuracy_score(data[&#x27;y&#x27;], y_pred)
+precision = precision_score(data[&#x27;y&#x27;], y_pred)
+recall = recall_score(data[&#x27;y&#x27;], y_pred)
+
+print(&quot;Accuracy:&quot;, accuracy)
+print(&quot;Precision:&quot;, precision)
+print(&quot;Recall:&quot;, recall)
+
+</pre></details><pre>Accuracy: 1.0
+Precision: 1.0
+Recall: 1.0
+</pre><p>The SVM learned that the classification depends on the distance of each point from the center (0,0).</p><p>While a linear model can only draw a straight line, the SVM learned a circular boundary. It identified that points within a certain radius belong to Class 0, while points further out belong to Class 1.</p><details><summary>Python code</summary><pre>data[&#x27;x3&#x27;] = np.sqrt(data[&#x27;x1&#x27;]**2 + data[&#x27;x2&#x27;]**2)</pre></details><p>We&#x27;ll now fit a logistic regression model (which is a linear classifier) on the new set of predictors `x1`, `x2`, `x3`.</p><details><summary>Python code</summary><pre>try:
+    logistic_regression = LogisticRegression().fit(data[[&#x27;x1&#x27;, &#x27;x2&#x27;, &#x27;x3&#x27;]], data[&#x27;y&#x27;])
+except KeyError:
+    print(&#x27;The column `x3` does not exist!&#x27;)</pre></details><details><summary>Python code</summary><pre>from sklearn.metrics import accuracy_score, precision_score, recall_score
+
+y_pred = logistic_regression.predict(data[[&#x27;x1&#x27;, &#x27;x2&#x27;, &#x27;x3&#x27;]])
+
+accuracy = accuracy_score(data[&#x27;y&#x27;], y_pred)
+precision = precision_score(data[&#x27;y&#x27;], y_pred)
+recall = recall_score(data[&#x27;y&#x27;], y_pred)
+
+print(&quot;Accuracy:&quot;, accuracy)
+print(&quot;Precision:&quot;, precision)
+print(&quot;Recall:&quot;, recall)</pre></details><pre>Accuracy: 1.0
+Precision: 1.0
+Recall: 1.0
+</pre><details><summary>Python code</summary><pre>import matplotlib.pyplot as plt
+import seaborn as sns
+
+
+sns.scatterplot(data=data, x=&#x27;x1&#x27;, y=&#x27;x3&#x27;, hue=&#x27;y&#x27;, alpha=0.5)
+plt.title(&#x27;Scatterplot of x1 vs x3 (Colored by y)&#x27;)
+plt.show()
+
+
+sns.scatterplot(data=data, x=&#x27;x2&#x27;, y=&#x27;x3&#x27;, hue=&#x27;y&#x27;, alpha=0.5)
+plt.title(&#x27;Scatterplot of x2 vs x3 (Colored by y)&#x27;)
+plt.show()</pre></details><pre>&lt;Figure size 640x480 with 1 Axes&gt;</pre><pre>&lt;Figure size 640x480 with 1 Axes&gt;</pre><p>We can also visualize this in three dimensions:</p><details><summary>Python code</summary><pre>try:
+    _ = plt.axes(projection = &#x27;3d&#x27;)
+    _ = _.scatter3D(data[&#x27;x1&#x27;], data[&#x27;x2&#x27;], data[&#x27;x3&#x27;], c=data[&#x27;y&#x27;])
+except KeyError:
+    print(&#x27;The column `x3` does not exist!&#x27;)</pre></details><pre>&lt;Figure size 640x480 with 1 Axes&gt;</pre><p>Adding x3 as the distance from the origin made the classes linearly separable because points in Class 0 have small x3 and points in Class 1 have large x3.</p><p>x3 is an engineered feature. By creating it from x1 and x2 to capture the radial distance to make the classes linearly separable for logistic regression.</p><p>The SVM with the RBF kernel solved the problem automatically without creating x3, it computes distances in a higher-dimensional space using the kernel. Logistic regression with x3 is straightforward.</p><p>With hundreds or thousands of predictors, it would be difficult to manually engineer features. In that case, I would use automated feature engineering tools but also apply domain knowledge when possible, ideally combining both to create meaningful features efficiently.</p><h2>Evaluation interpretation</h2><p>Original in-sample accuracy was 58.925% for logistic regression using x1/x2. The tuned SVM and radial-feature logistic model each reached 100% accuracy, precision and recall on the fitting data. These scores illustrate representational fit; they are not independent test performance. All displayed classification scores use the same observations used for model fitting. Grid-search cross-validation selects gamma, but the displayed 100% scores are resubstitution scores. Add a held-out test set and validate robustness under overlap/noise before drawing generalization conclusions.</p><h2>Original project visualizations</h2><img alt="Scatterplot.png" src="https://raw.githubusercontent.com/Cameron-Batts/Svm-Classification-Feature-Engineering/main/Images/Scatterplot.png"><img alt="Invert.png" src="https://raw.githubusercontent.com/Cameron-Batts/Svm-Classification-Feature-Engineering/main/Images/Invert.png"><img alt="Decision Boundary.png" src="https://raw.githubusercontent.com/Cameron-Batts/Svm-Classification-Feature-Engineering/main/Images/Decision%20Boundary.png"><img alt="3-D-Scatterplot.png" src="https://raw.githubusercontent.com/Cameron-Batts/Svm-Classification-Feature-Engineering/main/Images/3-D-Scatterplot.png"><img alt="2-Predictors.png" src="https://raw.githubusercontent.com/Cameron-Batts/Svm-Classification-Feature-Engineering/main/Images/2-Predictors.png"></main></html>
