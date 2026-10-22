@@ -141,9 +141,9 @@ The engineered feature reveals how non-linear data can become separable through 
 ```text
 data/        -> project data information
 Images/      -> visualizations and model outputs
-notebooks/   -> Jupyter notebook workflows
-reports/     -> exported PDF and HTML reports
-utils_DA.py  -> reusable helper and plotting utilities
+Notebooks/   -> Jupyter notebook workflows
+Reports/     -> exported PDF report
+Utils.DA.py  -> reusable helper and plotting utilities
 README.md    -> project overview and documentation
 ```
 
@@ -153,10 +153,9 @@ README.md    -> project overview and documentation
 
 | File | Description |
 |------|-------------|
-| `notebooks/Support Vector Machine Classification & Manual Feature Engineering.ipynb` | Full SVM classification and feature engineering workflow |
-| `reports/Support Vector Machine Classification & Manual Feature Engineering.pdf` | Exported PDF project report |
-| `reports/Support Vector Machine Classification & Manual Feature Engineering.html` | Exported HTML project report |
-| `utils_DA.py` | Helper functions for plotting and visualization |
+| `Notebooks/Support Vector Machine Classification & Manual Feature Engineering.ipynb` | Full SVM classification and feature engineering workflow |
+| `Reports/Support Vector Machine Classification & Manual Feature Engineering.pdf` | Exported PDF project report |
+| `Utils.DA.py` | Helper functions for plotting and visualization |
 | `Images/` | Visualizations used throughout the project |
 
 ---
